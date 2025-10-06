@@ -1,0 +1,15 @@
+name: wrf-sensitivity
+channels: [conda-forge]
+dependencies:
+  - python=3.11
+  - numpy
+  - pandas
+  - matplotlib
+  - metpy
+  - salib
+  - xarray
+  - netcdf4
+  - pint
+  - pip
+  - pip:
+      - typing_extensions

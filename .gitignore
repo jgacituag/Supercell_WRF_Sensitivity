@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.so
+.venv/
+.env/
+.ipynb_checkpoints/
+
+# Data & outputs
+outputs/
+data/**/*.nc
+data/**/*.npz
+data/**/*.npy
+wrfout_*
+namelist.*
+LOGS/
+LOGS/**
+
+# OS / editor
+.DS_Store
+*.swp
