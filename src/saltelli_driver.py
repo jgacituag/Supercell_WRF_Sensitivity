@@ -30,7 +30,7 @@ def main():
             from SALib.sample import saltelli
             from SALib.util import scale_samples
             problem = {'num_vars': 10, 'names': [f'u{i}' for i in range(10)], 'bounds': [[0,1]]*10}
-            U = saltelli.sample(problem, args.n_base, calc_second_order=False)
+            U = saltelli.sample(problem, args.n_base, calc_second_order=True)
         except Exception as e:
             raise SystemExit("SALib not available. Provide --u_csv CSV of u in [0,1]^10 or install SALib.") from e
 

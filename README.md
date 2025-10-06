@@ -15,7 +15,7 @@ with **Sobol/Saltelli** sampling.
 ## Quickstart
 ```bash
 # 1) Create environment
-mamba env create -f environment.yml
+conda env create -f environment.yml
 conda activate wrf-sensitivity
 
 # 2) Generate Saltelli set, diagnostics, and WRF input_sounding files

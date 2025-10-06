@@ -180,12 +180,14 @@ def bulk_shear(u: np.ndarray, v: np.ndarray, z: np.ndarray, depth_m: float) -> f
 
 
 def precipitable_water(p_hpa: np.ndarray, qv_gkg: np.ndarray) -> float:
-    """PW [mm] (kg/m^2) using trapezoidal integration."""
-    g = 9.80665
-    q = qv_gkg / 1000.0
-    p_pa = p_hpa * 100.0
-    # Integrate q dp / g; convert Pa to kg/m^2
-    return float(np.trapz(q, p_pa) / g)
+    """Return PW [mm] via vertical integration of qv."""
+    if not HAS_METPY:
+        return np.nan
+
+    dewpoint = dewpoint_from_qv(p_hpa, qv_gkg)
+    pw = mpcalc.precipitable_water(p_hpa * units.hectopascal,dewpoint * units.kelvin)
+    return float(pw.to('millimeter').m)
+
 
 
 def diagnostics(sound: Dict[str, np.ndarray]) -> Dict[str, float]:

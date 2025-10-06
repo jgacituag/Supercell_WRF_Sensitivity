@@ -6,6 +6,7 @@ dependencies:
   - pandas
   - matplotlib
   - metpy
+  - wrf-python
   - salib
   - xarray
   - netcdf4
