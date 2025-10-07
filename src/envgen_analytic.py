@@ -121,25 +121,92 @@ def hypsometric_pressure(z: np.ndarray, T_K: np.ndarray, qv_kgkg: np.ndarray, p0
         p[k] = p[k-1] * np.exp(-g * dz / (R_d * Tv_mid))
     return p / 100.0  # hPa
 
+def build_wind_profile(z, phys,
+                       style='linear_arc',
+                       turn_frac=0.4,          # fraction of shear depth where the turn begins
+                       theta0_deg=0.0,         # direction of the straight segment (deg)
+                       arc_deg=180.0,          # arc sweep (deg): 180 = semicircle
+                       clockwise=False):       # arc direction
+    """
+    Return u, v with a linear segment up to z_turn, then a circular arc to the top.
 
-def build_wind_profile(z: np.ndarray, phys: PhysParams) -> Tuple[np.ndarray, np.ndarray]:
-    """u,v with linear speed increase to Umax by Dshear, curvature controlled by curved_shear_per, LLJ optional."""
+    Inputs (from phys):
+      phys.Umax_ms     : target speed at z = phys.Dshear_km
+      phys.Dshear_km   : shear depth (km)
+      phys.llj_ms, phys.llj_h_km : optional LLJ added to u-component
+
+    tunables:
+      turn_frac   : z_turn / Dshear (0.2–0.6 typical)
+      theta0_deg  : heading of the linear segment (0° = +u / east)
+      arc_deg     : how much the hodograph turns after z_turn (default 180°)
+      clockwise   : True = clockwise rotation, False = counterclockwise
+    """
+
     z_km = z / 1000.0
-    V = np.zeros_like(z, dtype=float)
-    # Linear ramp to Umax at Dshear
-    V = np.minimum(z_km / max(phys.Dshear_km, 1e-3), 1.0) * phys.Umax_ms
-    # Hodograph turning 0 -> theta_max radians across 0–Dshear
-    theta_max = phys.curved_shear_per * np.pi  # up to 180°
-    theta = np.clip(z_km / max(phys.Dshear_km, 1e-3), 0.0, 1.0) * theta_max
-    u = V * np.cos(theta)
-    v = V * np.sin(theta)
-    # Add LLJ (Gaussian) in u-component for simplicity
-    if phys.llj_ms > 0.0:
+    D = max(phys.Dshear_km, 0.1)
+    Uend = float(phys.Umax_ms)
+
+    # --- Straight segment (0 -> z_turn) ---
+    z_turn = np.clip(turn_frac, 0.05, 0.95) * D
+    theta0 = np.deg2rad(theta0_deg)
+
+    # Speed increases linearly to r0 at z_turn; choose r0 so that the
+    # fraction of U at the join equals turn_frac (keeps total growth roughly linear)
+    r0 = Uend * (z_turn / D)                     # speed at the join
+    u_lin = r0 * np.cos(theta0)
+    v_lin = r0 * np.sin(theta0)
+    P0 = np.array([u_lin, v_lin])                # end point of straight segment
+
+    # --- Arc segment (z_turn -> D) ---
+    sgn = -1.0 if clockwise else +1.0
+    theta1 = theta0 + sgn * np.deg2rad(arc_deg)  # desired tangent at the top
+
+    # Circle geometry so the tangent is continuous at the join:
+    # center C lies along the normal to the straight segment at P0
+    # C = P0 - R * [sin(theta0), -cos(theta0)]
+    # end point at top: P1 = C + R * [sin(theta1), -cos(theta1)]
+    # enforce |P1| = Uend -> solve quadratic for R >= 0
+    Dvec = np.array([np.sin(theta1) - np.sin(theta0),
+                     -(np.cos(theta1) - np.cos(theta0))])
+    a = float(Dvec @ Dvec)
+    b = 2.0 * float(P0 @ Dvec)
+    c = float(P0 @ P0) - Uend**2
+    disc = max(0.0, b*b - 4*a*c)
+    R = (-b + np.sqrt(disc)) / (2*a) if a > 0 else 0.0
+    R = max(R, 1e-6)
+
+    C = P0 - R * np.array([np.sin(theta0), -np.cos(theta0)])
+
+    # Build profile
+    u = np.zeros_like(z, dtype=float)
+    v = np.zeros_like(z, dtype=float)
+
+    # 1) Straight part
+    m_lin = z_km <= z_turn + 1e-6
+    if z_turn > 0:
+        frac = (z_km[m_lin] / z_turn)
+    else:
+        frac = np.zeros_like(z_km[m_lin])
+    u[m_lin] = frac * P0[0]
+    v[m_lin] = frac * P0[1]
+
+    # 2) Arc part
+    m_arc = z_km > z_turn
+    if np.any(m_arc):
+        # sweep angle along depth (linear in z)
+        phi0 = theta0 - np.pi/2.0
+        phi1 = theta1 - np.pi/2.0
+        t = (z_km[m_arc] - z_turn) / max(D - z_turn, 1e-6)
+        phi = phi0 + t * (phi1 - phi0)
+        u[m_arc] = C[0] + R * np.cos(phi)
+        v[m_arc] = C[1] + R * np.sin(phi)
+
+    # Optional LLJ bump (Gaussian) added to u
+    if getattr(phys, "llj_ms", 0.0) > 0.0:
         sigma = 0.3  # km
-        u += phys.llj_ms * np.exp(-0.5 * ((z_km - phys.llj_h_km) / sigma) ** 2)
+        u += phys.llj_ms * np.exp(-0.5 * ((z_km - phys.llj_h_km) / sigma)**2)
+
     return u, v
-
-
 # ---------------------- Generator --------------------------------------------
 
 def generate_sounding(u: List[float], z_top_km: float = 20.0, dz_m: float = 50.0) -> Dict[str, np.ndarray]:
@@ -187,7 +254,6 @@ def precipitable_water(p_hpa: np.ndarray, qv_gkg: np.ndarray) -> float:
     dewpoint = dewpoint_from_qv(p_hpa, qv_gkg)
     pw = mpcalc.precipitable_water(p_hpa * units.hectopascal,dewpoint * units.kelvin)
     return float(pw.to('millimeter').m)
-
 
 
 def diagnostics(sound: Dict[str, np.ndarray]) -> Dict[str, float]:
