@@ -5,17 +5,16 @@ from typing import Dict, List, Tuple
 
 @dataclass
 class PhysParams:
-    Tsfc_C: float
-    Gamma_bdy: float
-    Gamma_trp: float
-    Dtrp_km: float
-    RHsfc: float
-    Dwv_km: float
-    Umax_ms: float
-    Dshear_km: float
-    curved_shear_per: float
-    llj_ms: float
-    llj_h_km: float
+    Tsfc_C: float            # Surface temperature in Celsius
+    Gamma_bdy: float         # Boundary layer lapse rate in K/km
+    Gamma_trp: float         # Tropopause lapse rate in K/km
+    Dtrp_km: float           # Tropopause height in km
+    RHsfc: float             # Surface relative humidity (0-1)
+    Dwv_km: float            # Depth of low-level moisture in km
+    Umax_ms: float           # Maximum wind speed in m/s
+    Dshear_km: float         # Depth of wind shear in km
+    curved_shear_per: float  # Fraction of shear that is curved (0-1)
+
 
 def lin(a: float, b: float, u: float) -> float:
     return a + (b - a) * min(max(u, 0.0), 1.0)
@@ -36,6 +35,12 @@ def u01_to_phys(u: List[float]) -> PhysParams:
     curved_shear_per = lin(0.0, 0.6, u7)
     llj_ms    = lin(0.0, 8.0, u8)
     llj_h_km  = lin(0.5, 1.2, u9)
+    turn_frac      = 0.25 + 0.25*u7
+    join_speed_frac= 0.30 + 0.40*u8
+    theta0_deg     = -60.0 + 75.0*u9
+    arc_signed_deg = -150.0 + 300.0*u10
+    llj_ms         = 0.0 + 8.0*u11
+    llj_h_km       = 0.5 + 0.7*u12
     return PhysParams(Tsfc_C, Gamma_bdy, Gamma_trp, Dtrp_km, RHsfc, Dwv_km,
                       Umax_ms, Dshear_km, curved_shear_per, llj_ms, llj_h_km)
 
