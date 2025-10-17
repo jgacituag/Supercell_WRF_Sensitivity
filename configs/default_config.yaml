@@ -1,0 +1,96 @@
+# ----------------------------------------------------
+# A. FILE PATHS AND DIRECTORY SETUP
+# ----------------------------------------------------
+PATHS:
+  # Base directory for the entire experiment output
+  OUTPUT_ROOT: "outputs"
+  # Name of the current Sobol experiment (used for the subdirectory)
+  EXPERIMENT_NAME: "sobol_exp_defaul"
+  # Path to the base WRF input sounding template
+  BASE_SOUNDING_TEMPLATE: "src/input_sounding"
+  # Path where final WRF simulation outputs (NetCDF) will be stored
+  WRF_RUNS_DIR: "wrf_simulations" # Subdirectory inside EXPERIMENT_NAME
+
+# ----------------------------------------------------
+# B. SOBOL SAMPLING AND PARAMETER SPACE (STEP 1)
+# ----------------------------------------------------
+SOBOL:
+  # Number of base samples (N) for SALib. Total samples = N * (2D + 2), where D its the total of parameters
+  N_SAMPLES_BASE: 25 
+  # Random seed for reproducibility
+  RANDOM_SEED: 591946
+  # Number of samples to process per batch (for cluster array jobs)
+  SAMPLES_PER_BATCH: 100 
+  
+  # DEFINITION OF THE D-PARAMETER SPACE
+  PROBLEM_DEFINITION:
+    # Parameter Name: [Min Value, Max Value]
+    low_level_rh: [90, 100]
+    mid_level_rh: [30, 70]
+    upper_level_rh: [10, 40]
+    surface_theta: [300, 308]
+    low_level_lapse: [8.0, 9.5]
+    mid_level_lapse: [6.0, 8.0]
+    moisture_depth: [4000, 12000]
+    shear_depth: [3000, 12000]
+    shear_rate: [0.0008333, 0.0025] # [1/1200, 1/400]
+    shear_curvature: [0.0, 1.0]
+    shear_direction: [0, 360]
+    #low_level_jet: [0, 15]
+
+# ----------------------------------------------------
+# C. SOUNDING GENERATION AND DIAGNOSTICS (STEP 2)
+# ----------------------------------------------------
+SOUNDINGS:
+  # Fixed layer height for tropopause used in generate_temperature_profile
+  TROP_HEIGHT_M: 13000 
+  # Option to skip MetPy diagnostic calculations for speed (e.g., during testing)
+  SKIP_DIAGNOSTICS: False
+
+  # --- Parallel Processing Controls ---
+  # Set to true to use multiprocessing for faster sounding generation
+  RUN_PARALLEL: True 
+  # Number of processors to use. Set to 'null' for automatic detection (os.cpu_count())
+  N_PROCESSORS: null
+
+
+# ----------------------------------------------------
+# D. CONVECTIVE VIABILITY FILTERING (STEP 2B)
+# ----------------------------------------------------
+FILTER:
+  # Set a value to 'null' (or None) to disable that specific filter.
+  # Units: J/kg (CAPE/CIN), m/s (Shear), kg/m^2 (PWAT)
+
+  # --- Instability Filters ---
+  MUCAPE_MIN: 200.0
+  MUCAPE_MAX: 10000.0 # <-- Your new filter for unrealistic CAPE
+  
+  MUCIN_MIN: -200.0   # CIN must be weaker (less negative) than -200
+  MUCIN_MAX: 0.0      # CIN must be present (stronger than 0)
+
+  # --- Shear Filters ---
+  SHEAR_0_6KM_MIN: 10.0     # e.g., 10 m/s minimum for supercells
+  SHEAR_0_6KM_MAX: null
+
+  # --- Moisture Filters ---
+  PWAT_MIN: null      # Precipitable Water
+  PWAT_MAX: null
+
+# ----------------------------------------------------
+# E. WRF SIMULATION SETUP (STEP 3)
+# ----------------------------------------------------
+WRF_SIM:
+  # WRF model base path (place where wrf.exe and ideal.exe reside)
+  MODEL_PATH: "/path/to/wrf_v4.4/test/em_ideal_case" 
+  # --- Model Dynamics Parameters (for namelist.input) ---
+  MODEL_DT: 1.0               # Time step (seconds)
+  MODEL_DX: 500               # Horizontal grid spacing (meters)
+  MODEL_NY: 400               # Number of grid points in Y-direction
+  MODEL_NX: 400               # Number of grid points in X-direction
+  MODEL_NZ: 50                # Number of vertical levels
+  NTHREADS: 4                 # Number of OpenMP threads for simulation
+  # --- Output Metrics (Sensitivity Function) ---
+  SF_TYPE: "upward_vertical_velocity_percentile" # Metric to analyze (e.g., max updraft)
+  SF_PERCENTILE: 99           # Percentile (e.g., 99th percentile of W)
+  SF_ENDLEV: 20               # Upper level index for metric calculation
+  SF_ENDTIME: 240             # End time index (e.g., 240 minutes)

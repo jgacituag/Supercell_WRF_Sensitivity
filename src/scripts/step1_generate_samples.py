@@ -3,56 +3,26 @@ Step 1: Generate Sobol samples for sensitivity analysis
 Creates parameter samples and saves them for later use.
 
 Usage:
-    python step1_generate_samples.py --n_samples 500 --output_dir sobol_exp
+    python src/scripts/step1_generate_samples.py --config configs/experiment_config.yaml
 """
 
 import numpy as np
 import pickle
 import argparse
 import os
+import yaml
 from SALib.sample import saltelli
 import warnings
 warnings.filterwarnings('ignore')
 
-def define_problem():
-    """
-    Define the problem for Sobol sensitivity analysis.
-    
-    Modify parameter bounds HERE.
-    """
-    
-    problem = {
-        'num_vars': 9,
-        'names': [
-            'low_level_rh',       # Boundary layer RH (%)
-            'mid_level_rh',       # Mid-level RH (%)
-            'upper_level_rh',     # Upper troposphere RH (%)
-            'surface_theta',      # Surface potential temp (K)
-            'low_level_lapse',    # BL lapse rate (K/km)
-            'mid_level_lapse',    # Mid-level lapse rate (K/km)
-            'shear_depth',        # Total Shear height (m)
-            'shear_magnitude',    # 0 to shear_depth bulk shear (m/s)
-            'shear_curvature',    # Hodograph curvature (0-1)
-            #'shear_direction',    # Shear vector direction (deg)
-            #'low_level_jet'       # LLJ strength (m/s)
-        ],
-        'bounds': [
-            [70, 95],         # Low RH: moist BL
-            [30, 70],         # Mid RH: dry to moist
-            [10, 40],         # Upper RH: dry upper levels
-            [295, 305],       # Surface theta Kelvin: cool to warm
-            [7.5, 9.5],       # Low lapse: stable to unstable
-            [6.0, 8.0],       # Mid lapse: typical tropospheric
-            [4000, 8000],     # Total Shear Depth
-            [1, 35],          # Shear: weak to strong
-            [0, 1],           # Curvature: linear to semi-circular
-            #[0, 360]         # Direction: all azimuths
-            #[0, 15]           # LLJ: none to strong
-        ]
-    }
-    
-    return problem
-
+def load_config(config_path):
+    """Loads and returns the configuration dictionary from a YAML file."""
+    if not os.path.exists(config_path):
+        print(f"ERROR: Config file not found at {config_path}. Exiting.")
+        return None 
+    with open(config_path, 'r') as f:
+        config = yaml.safe_load(f)
+    return config
 
 def generate_samples(n_samples, problem, seed=None):
     """
@@ -185,52 +155,68 @@ def create_batch_files(n_samples_total, output_dir, samples_per_batch=100):
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Generate Sobol samples for WRF sensitivity analysis'
-    )
-    parser.add_argument('--n_samples', type=int, default=25,
-                       help='Number of base samples (default: 500)')
-    parser.add_argument('--output_dir', type=str, default='outputs/sobol_exp_500',
-                       help='Output directory (default: outputs/sobol_exp_500)')
-    parser.add_argument('--seed', type=int, default=591946,
-                       help='Random seed for reproducibility')
-    parser.add_argument('--samples_per_batch', type=int, default=100,
-                       help='Samples per batch for parallel processing (default: 100)')
-    
+        description='Generate Sobol samples for WRF sensitivity analysis')
+    parser.add_argument('--config', type=str, default='configs/default_config.yaml',
+                            help='Path to the configuration file.')
     args = parser.parse_args()
     
+    if args.config == 'configs/default_config.yaml':
+        print("INFO: Using default configuration file: configs/default_config.yaml")
+        print("      To create a new experiment, please copy this file, edit it,")
+        print("      and specify it using: --config configs/your_new_config.yaml")
+    else:
+        print(f"INFO: Loading configuration from: {args.config}")
+    config = load_config(args.config)
+    if config is None:
+        return
+
     print("="*60)
     print("STEP 1: GENERATING SOBOL SAMPLES")
     print("="*60)
-    
+
+    n_samples = config['SOBOL']['N_SAMPLES_BASE']
+    seed= config['SOBOL']['RANDOM_SEED']
+    samples_per_batch = config['SOBOL']['SAMPLES_PER_BATCH']
+    output_root = config['PATHS']['OUTPUT_ROOT']
+    exp_name = config['PATHS']['EXPERIMENT_NAME']
+    output_dir=f"{output_root}/{exp_name}"
+
     # Define problem
     print("\nDefining problem...")
-    problem = define_problem()
+    param_dict = config['SOBOL']['PROBLEM_DEFINITION']
+    problem = {
+        'num_vars': len(param_dict),
+        'names': list(param_dict.keys()),
+        'bounds': list(param_dict.values())
+    }
     
     # Generate samples
-    print(f"\nGenerating samples with N={args.n_samples}...")
-    print(f"This will create {args.n_samples * (2 * problem['num_vars'] + 2)} total samples")
+    print(f"\nGenerating samples with N={n_samples}...")
+    total_samples_calc = n_samples * (2 * problem['num_vars'] + 2)
+    print(f"This will create {total_samples_calc} total samples")
     
-    param_values = generate_samples(args.n_samples, problem, seed=args.seed)
+    param_values = generate_samples(n_samples, problem, seed=seed)
     
     # Save everything
     print("\nSaving experiment setup...")
     metadata = {
-        'seed': args.seed,
-        'samples_per_batch': args.samples_per_batch
+        'seed': seed,
+        'samples_per_batch': samples_per_batch,
+        'config_file_path': args.config
     }
-    save_experiment_setup(problem, param_values, args.output_dir, metadata)
+    save_experiment_setup(problem, param_values, output_dir, metadata)
     
     # Create batch files
     create_batch_files(
         len(param_values), 
-        args.output_dir, 
-        args.samples_per_batch
+        output_dir, 
+        samples_per_batch
     )
     
     print("\n" + "="*60)
     print("STEP 1 COMPLETE!")
     print("="*60)
-    print(f"\nNext step: python src/step2_generate_soundings.py --input_dir {args.output_dir}")
+    print("\nNext step: python src/scripts/step2_generate_soundings.py --config configs/experiment_config.yaml")
 
 
 if __name__ == "__main__":

@@ -1,9 +1,0 @@
-numpy
-pandas
-matplotlib
-metpy
-SALib
-xarray
-netCDF4
-pint
-typing_extensions

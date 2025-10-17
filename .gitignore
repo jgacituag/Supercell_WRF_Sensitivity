@@ -1,23 +1,40 @@
-# Python
+# Python environment & cache
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 *.so
 .venv/
+venv/
 .env/
 .ipynb_checkpoints/
 
-# Data & outputs
-outputs/
-data/**/*.nc
-data/**/*.npz
-data/**/*.npy
-wrfout_*
-namelist.*
-LOGS/
-LOGS/**
-
-# OS / editor
+# OS / editor files
 .DS_Store
 *.swp
+
+# ----------------------------------------------------
+# Project-Specific Rules
+# ----------------------------------------------------
+
+# Configuration files
+# Ignore all configs...
+configs/*.yaml
+# ...EXCEPT the default template
+!configs/default_config.yaml
+
+# Ignore the entire outputs directory
+outputs/
+
+# Figures & Plots (catch-all, even though they should be in outputs/)
+*.png
+*.pdf
+*.jpg
+
+# WRF & simulation files
+wrfout_*
+*.nc
+namelist.*
+rsl.*
+LOGS/
+LOGS/**

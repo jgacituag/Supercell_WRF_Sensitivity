@@ -76,7 +76,7 @@ def generate_sounding(params, base_sounding_file='input_sounding'):
 
         t_sfc = params['surface_theta']  # At surface, theta ≈ T for p=1000 hPa
         p_sfc = sounding['surf_pressure']
-        
+
         es_sfc = 6.112 * np.exp(17.67 * (t_sfc - 273.16) / (t_sfc - 29.65))
         qvs_sfc = epsilon * es_sfc / (p_sfc - (1 - epsilon) * es_sfc) * 1000.0
         sounding['surf_qv'] = qvs_sfc * (params['low_level_rh'] / 100.0)
@@ -164,15 +164,15 @@ def calculate_diagnostics(sounding):
         # Bulk wind shear (various layers)
         try:
             # 0-1 km shear
-            shear_0_1 = bulk_shear(p, u, v, heights=z, depth=1000*units.meter)
+            shear_0_1 = bulk_shear(p, u, v, height=z, depth=1000*units.meter)
             diag['shear_0_1km'] = float(shear_0_1[0].magnitude)
             
             # 0-3 km shear  
-            shear_0_3 = bulk_shear(p, u, v, heights=z, depth=3000*units.meter)
+            shear_0_3 = bulk_shear(p, u, v, height=z, depth=3000*units.meter)
             diag['shear_0_3km'] = float(shear_0_3[0].magnitude)
             
             # 0-6 km shear
-            shear_0_6 = bulk_shear(p, u, v, heights=z, depth=6000*units.meter)
+            shear_0_6 = bulk_shear(p, u, v, height=z, depth=6000*units.meter)
             diag['shear_0_6km'] = float(shear_0_6[0].magnitude)
         except:
             diag['shear_0_1km'] = np.nan
@@ -221,7 +221,7 @@ def generate_temperature_profile(sounding, params):
     # Define layer boundaries
     low_level_top = 3000  # m
     mid_level_top = 9000  # m
-    tropopause = 12000   # m 
+    tropopause = 13000   # m 
     
     theta = np.zeros_like(sounding['height'])
     
@@ -273,7 +273,7 @@ def generate_moisture_profile(sounding, params):
     
     # Define moisture layer boundaries
     low_level_top = 2000  # m
-    mid_level_top = 6000  # m
+    mid_level_top = params['moisture_depth']  # m
     dry_level_top = 10000  # m
     
     qv = np.zeros_like(sounding['height'])
@@ -310,13 +310,15 @@ def generate_wind_profile_sh(sounding, params,remove_mean_wind=True):
     """
     Generate wind profile typical for Southern Hemisphere supercells.
     
-    In SH, hodographs rotate clockwise (opposite to NH). Typical profiles
-    show westerly or northwesterly low-level flow veering to westerly/
-    southwesterly at mid-levels.
+    Uses shear_rate * shear_depth to define bulk shear magnitude (U_max).
     """
     
     shear_depth = params['shear_depth']  # 
-    shear_mag = params['shear_magnitude']  # 0 to shear_depth km bulk shear
+    shear_rate = params['shear_rate']     # s^-1 (New input parameter)
+    
+    # Calculate the total bulk shear magnitude (U_max) from the new inputs
+    shear_mag = shear_rate * shear_depth # <-- UPDATED: Derived value (equivalent to U_max/D_shear * D_shear)
+    
     curvature = params['shear_curvature']  # 0=linear, 1=half circle
     direction = params['shear_direction']  # degrees
     llj_strength = params['low_level_jet']
@@ -380,7 +382,6 @@ def generate_wind_profile_sh(sounding, params,remove_mean_wind=True):
         sounding['v'] = sounding['v'] - mean_v
     
     return sounding
-
 
 def calculate_cape_cin(sounding, parcel_type='most_unstable'):
     """
