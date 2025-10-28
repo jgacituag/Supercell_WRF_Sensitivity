@@ -40,7 +40,7 @@ python src/scripts/step4_compute_metrics.py --config configs/experiment_config.y
 # 8) Step 5: Sobol indices + CIs + convergence check
 python src/scripts/step5_compute_sobol.py --config configs/experiment_config.yaml
 ## Repository Structure
-
+```
 ```
 .
 ├── configs/                    # default + your editable experiment config
