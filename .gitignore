@@ -1,40 +1,59 @@
-# Python environment & cache
+# ----------------------------
+# Python env & caches
+# ----------------------------
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
 *.so
 .venv/
 venv/
-.env/
+.env
 .ipynb_checkpoints/
+*.egg-info/
 
-# OS / editor files
+# Editors / OS
 .DS_Store
 *.swp
+*.swo
+Thumbs.db
 
-# ----------------------------------------------------
-# Project-Specific Rules
-# ----------------------------------------------------
+# ----------------------------
+# Project structure
+# ----------------------------
 
-# Configuration files
-# Ignore all configs...
+# Configs: keep the template; ignore user/run-time configs
 configs/*.yaml
-# ...EXCEPT the default template
 !configs/default_config.yaml
 
-# Ignore the entire outputs directory
+# Outputs: everything produced by the pipeline
 outputs/
+outputs/**
+# Logs
+logs/
+*.log
+# Temporary / scratch runs
+tmp/
+tmp/**
 
-# Figures & Plots (catch-all, even though they should be in outputs/)
-*.png
-*.pdf
-*.jpg
+# PBS job files generated for submission
+pbs_jobs/generated/
+# Keep templates/scripts under version control:
+!pbs_jobs/templates/**
+!pbs_jobs/metrics_batch.sh
+!pbs_jobs/test_single_wrf.sh
 
-# WRF & simulation files
+# WRF & heavy simulation artifacts (just in case someone dumps them in repo root)
 wrfout_*
 *.nc
 namelist.*
 rsl.*
 LOGS/
 LOGS/**
+
+# Figures (should be reproducible)
+*.png
+*.jpg
+*.jpeg
+*.pdf
+
+# Notebooks’ export artifacts
+*.nbconvert.ipynb

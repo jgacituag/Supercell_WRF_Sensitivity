@@ -191,7 +191,7 @@ def main():
     }
     
     # Generate samples
-    print(f"\nGenerating samples with N={n_samples}...")
+    print(f"\nGenerating samples with N={n_samples} and D={len(param_dict)}...")
     total_samples_calc = n_samples * (2 * problem['num_vars'] + 2)
     print(f"This will create {total_samples_calc} total samples")
     

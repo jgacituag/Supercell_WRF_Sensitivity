@@ -5,17 +5,17 @@ PATHS:
   # Base directory for the entire experiment output
   OUTPUT_ROOT: "outputs"
   # Name of the current Sobol experiment (used for the subdirectory)
-  EXPERIMENT_NAME: "sobol_exp_defaul"
+  EXPERIMENT_NAME: "sobol_exp_default"
   # Path to the base WRF input sounding template
   BASE_SOUNDING_TEMPLATE: "src/input_sounding"
   # Path where final WRF simulation outputs (NetCDF) will be stored
-  WRF_RUNS_DIR: "wrf_simulations" # Subdirectory inside EXPERIMENT_NAME
+  WRF_OUTPUT_DIR: 'outputs/sobol_exp_default/wrf_results'
 
 # ----------------------------------------------------
 # B. SOBOL SAMPLING AND PARAMETER SPACE (STEP 1)
 # ----------------------------------------------------
 SOBOL:
-  # Number of base samples (N) for SALib. Total samples = N * (2D + 2), where D its the total of parameters
+  # Number of base samples (N) for SALib. Total samples = N * (2D + 2), where D is the total of parameters
   N_SAMPLES_BASE: 25 
   # Random seed for reproducibility
   RANDOM_SEED: 591946
@@ -24,26 +24,47 @@ SOBOL:
   
   # DEFINITION OF THE D-PARAMETER SPACE
   PROBLEM_DEFINITION:
-    # Parameter Name: [Min Value, Max Value]
-    low_level_rh: [90, 100]
-    mid_level_rh: [30, 70]
-    upper_level_rh: [10, 40]
-    surface_theta: [300, 308]
-    low_level_lapse: [8.0, 9.5]
-    mid_level_lapse: [6.0, 8.0]
-    moisture_depth: [4000, 12000]
-    shear_depth: [3000, 12000]
-    shear_rate: [0.0008333, 0.0025] # [1/1200, 1/400]
-    shear_curvature: [0.0, 1.0]
-    shear_direction: [0, 360]
-    #low_level_jet: [0, 15]
+    # ==================== MOISTURE PARAMETERS ====================
+    # Relative humidity controls at different levels
+    low_level_rh:    [80, 95]      # % RH in boundary layer (well-mixed)
+    mid_level_rh:    [40, 70]      # % RH in lower free troposphere  
+    upper_level_rh:  [10, 40]      # % RH in upper troposphere
+    # Optional moisture parameters (currently using defaults):
+    # moisture_transition_depth: [500, 2000]  # m, default = 1000m
+    # ==================== TEMPERATURE PARAMETERS ====================
+    surface_theta:      [296, 306]     # K, surface potential temperature
+    z_ml_top:           [600, 1500]    # m, boundary layer (PBL) top height (Also afects moisture profile)
+    z_trop_top:         [11000, 13000] # m, tropopause height
+    theta_lapse:        [2.5, 4.5]     # K/km, troposphere theta lapse rate
+    # Optional temperature parameters (currently using defaults):
+    # theta_lapse_bl:     [0.5, 2.5]   # K/km, default = 1.9 K/km (matches WRF default input sounding)
+    # theta_lapse_strat:  [15.0, 25.0] # K/km, default = 20.0 K/km (matches WRF default input sounding)
+    
+    # ==================== WIND SHEAR PARAMETERS ====================
+    shear_depth:     [3000, 12000]        # m, depth of shear layer
+    shear_rate:      [0.0008333, 0.0025]  # 1/s, shear rate [1/1200, 1/400]
+    shear_curvature: [0.0, 1.0]           # 0=linear hodograph, 1=curved hodograph (semicircle)
+    
+    # ==================== LOW-LEVEL JET (Optional) ====================
+    # Uncomment to enable low-level jet parameters:
+    # llj_strength: [0, 15]      # m/s, LLJ maximum wind speed
+    # llj_height:   [500, 1500]  # m, height of LLJ maximum
+    # llj_dir:      [0, 360]     # degrees, LLJ direction
 
+  # Sobol analysis settings
+  metric: max_qgraup     # metric key in metrics.pkl
+  fail_strategy: penalize     # "penalize" or "skip"
+  penalty_value: -1.0e9       # used if sample is missing or non-viable
+  bootstrap:
+    n_resamples: 1000         # number of bootstrap resamples
+    ci_level: 0.95
+  convergence_check: true
+  convergence_threshold: 0.05 # relative change threshold for stability
+  n_blocks: 4                 # use 1/4, 1/2, 3/4, full subsets
 # ----------------------------------------------------
 # C. SOUNDING GENERATION AND DIAGNOSTICS (STEP 2)
 # ----------------------------------------------------
 SOUNDINGS:
-  # Fixed layer height for tropopause used in generate_temperature_profile
-  TROP_HEIGHT_M: 13000 
   # Option to skip MetPy diagnostic calculations for speed (e.g., during testing)
   SKIP_DIAGNOSTICS: False
 
@@ -53,7 +74,6 @@ SOUNDINGS:
   # Number of processors to use. Set to 'null' for automatic detection (os.cpu_count())
   N_PROCESSORS: null
 
-
 # ----------------------------------------------------
 # D. CONVECTIVE VIABILITY FILTERING (STEP 2B)
 # ----------------------------------------------------
@@ -62,35 +82,120 @@ FILTER:
   # Units: J/kg (CAPE/CIN), m/s (Shear), kg/m^2 (PWAT)
 
   # --- Instability Filters ---
-  MUCAPE_MIN: 200.0
-  MUCAPE_MAX: 10000.0 # <-- Your new filter for unrealistic CAPE
+  MUCAPE_MIN: 200.0      # Minimum CAPE for convection
+  MUCAPE_MAX: 10000.0    # Maximum CAPE (filter unrealistic cases)
   
-  MUCIN_MIN: -200.0   # CIN must be weaker (less negative) than -200
-  MUCIN_MAX: 0.0      # CIN must be present (stronger than 0)
+  MUCIN_MIN: -200.0      # CIN must be weaker (less negative) than -200 J/kg
+  MUCIN_MAX: null        # CIN must be present (stronger than 0 J/kg)
 
   # --- Shear Filters ---
-  SHEAR_0_6KM_MIN: 10.0     # e.g., 10 m/s minimum for supercells
+  SHEAR_0_6KM_MIN: null  # e.g., 10 m/s minimum for supercells
   SHEAR_0_6KM_MAX: null
 
   # --- Moisture Filters ---
-  PWAT_MIN: null      # Precipitable Water
-  PWAT_MAX: null
+  PWAT_MIN: null         # Precipitable Water minimum
+  PWAT_MAX: null         # Precipitable Water maximum
 
 # ----------------------------------------------------
 # E. WRF SIMULATION SETUP (STEP 3)
 # ----------------------------------------------------
-WRF_SIM:
-  # WRF model base path (place where wrf.exe and ideal.exe reside)
-  MODEL_PATH: "/path/to/wrf_v4.4/test/em_ideal_case" 
-  # --- Model Dynamics Parameters (for namelist.input) ---
-  MODEL_DT: 1.0               # Time step (seconds)
-  MODEL_DX: 500               # Horizontal grid spacing (meters)
-  MODEL_NY: 400               # Number of grid points in Y-direction
-  MODEL_NX: 400               # Number of grid points in X-direction
-  MODEL_NZ: 50                # Number of vertical levels
-  NTHREADS: 4                 # Number of OpenMP threads for simulation
-  # --- Output Metrics (Sensitivity Function) ---
-  SF_TYPE: "upward_vertical_velocity_percentile" # Metric to analyze (e.g., max updraft)
-  SF_PERCENTILE: 99           # Percentile (e.g., 99th percentile of W)
-  SF_ENDLEV: 20               # Upper level index for metric calculation
-  SF_ENDTIME: 240             # End time index (e.g., 240 minutes)
+WRF:
+  # Path to WRF em_quarter_ss directory (with ideal.exe, wrf.exe, and namelist.input)
+  MODEL_PATH: '/home/jorge.gacitua/salidas/em_quarter_ss'
+  
+  # Directory for WRF output (metrics, diagnostics)
+  # This will be created relative to repository root
+  WRF_OUTPUT_DIR: 'outputs/sobol_exp_default/wrf_results'
+  
+  # Temporary directory for WRF runs (will be cleaned up)
+  TEMP_DIR: 'tmp/wrf_runs'
+  
+  # --- Model Dynamics Parameters (modifies namelist.input) ---
+  # These values will be substituted into the base namelist.input
+  # from MODEL_PATH before each run
+  
+  MODEL_DT: 12                # Time step (seconds)
+  MODEL_DX: 2000.0            # Horizontal grid spacing in X (meters)
+  MODEL_DY: 2000.0            # Horizontal grid spacing in Y (meters, optional - defaults to MODEL_DX)
+  MODEL_NX: 80                # Number of grid points in X-direction (e_we in namelist)
+  MODEL_NY: 80                # Number of grid points in Y-direction (e_sn in namelist)
+  MODEL_NZ: 51                # Number of vertical levels (e_vert in namelist)
+  
+  # OpenMP threads per WRF run
+  NTHREADS: 1
+  MPI_PROCS: 48             # Number of MPI processes per WRF run (for MPI parallelization)
+  
+  # Number of WRF runs to execute in parallel
+  # WARNING: PARALLEL * MPI_PROCS should not exceed available cores!
+  PARALLEL_RUNS: 1
+  
+  # Cleanup temporary run directories after completion
+  CLEANUP_AFTER_RUN: true
+  
+  # Keep wrfout files (WARNING: can be very large!)
+  KEEP_WRFOUT: true
+  
+  # PBS Queue settings (for HPC submission)
+  PBS_QUEUE: 'larga'
+  PBS_NCORES: 48          # this should match MPI_PROCS and PARALLEL_RUNS
+  PBS_WALLTIME: '24:00:00'
+  
+  # Conda environment settings
+  CONDA_PATH: '/home/jorge.gacitua/salidas/miniconda3'
+  CONDA_ENV: 'wrf-sensitivity'
+
+metrics_job:
+  enabled: true
+  workers: 48
+  merge: true
+  dt_seconds: 300
+
+  environment:
+    time:
+      mode: wrfout_index     # wrfout_index | minutes_since_start
+      t_index: 0
+      minutes: 0             # ignored unless mode=minutes_since_start
+    column:
+      mode: corner           # corner | ij | latlon
+      corner: SW             # SW | SE | NW | NE
+      offset_i: 1
+      offset_j: 1
+      i: null
+      j: null
+      lat: null
+      lon: null
+    metrics:
+      - mucape
+      - mucin
+      - mlcape
+      - mlcin
+      - dcape
+      - lcl
+      - shear_0_1km
+      - shear_0_3km
+      - shear_0_6km
+      - shear_3_6km
+      - srh_0_1km
+      - srh_0_3km
+      - stp
+
+  storm:
+    time_window:
+      mode: minutes        # minutes | indices
+      start_min: 10        # default spin-up skip
+      end_min: null        # null = last wrfout
+      start_idx: null
+      end_idx: null
+    mask:
+      use_reflectivity: true
+      dbz_threshold: 20.0
+    slab:
+      zmin: null           # null/null => full column
+      zmax: null
+    metrics:
+      - updraft_p99
+      - downdraft_p99
+      - reflectivity_max
+      - reflectivity_mean
+      - precip_total
+      - precip_rate_p99
